@@ -1,6 +1,6 @@
 ---
 title: "Part 1"
-author: "YOUR NAME"
+author: "Tianhao Yi"
 output: 
   html_document:
     code_folding: hide
@@ -11,30 +11,165 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
 library(tidyverse)
+library(DBI)
+library(dbplyr)
+library(sf)
+library(cmfproperty)
 library(lubridate)
 
 ```
 
-Template file. Code will be included in folded blocks in the output to facilitate grading. Please knit this file and commit both the rmd and the html output. If you add external files to your analysis, please commit them to the files folder in this repository. NOTE: please do not commit large (15MB+) files to GitHub. Instead please denote the origin of the files in your code. 
+con <- dbConnect(RSQLite::SQLite(), "C:/Users/yitia/Desktop/470/part.1/detroit.sqlite")
 
-```{r}
-#example connection to database. note that you have to download the database from onedrive
+DBI::dbListTables(con)
 
-con <- DBI::dbConnect(RSQLite::SQLite(), "database/detroit.sqlite")
+sales <- dplyr::tbl(con, 'sales') %>% dplyr::collect()
 
-# sales tbl
+assessments <- dplyr::tbl(con, 'assessments') %>% dplyr::collect()
 
-dplyr::tbl(con, 'sales')
+blight <- dplyr::tbl(con, 'blight') %>% dplyr::collect()
 
-# convert to tibble
-#dplyr::tbl(con, 'sales') %>% dplyr::collect()
+foreclosures <- dplyr::tbl(con, 'foreclosures') %>% dplyr::collect()
 
-# sql query
+parcels <- dplyr::tbl(con, 'parcels') %>% dplyr::collect()
 
-dplyr::tbl(con, 'sales') %>% count(year(sale_date))
+parcels_historic <- dplyr::tbl(con, 'parcels_historic') %>% dplyr::collect()
 
-#dplyr::tbl(con, 'sales') %>% count(year(sale_date)) %>% show_query()
+dbDisconnect(con)
 
-```
+sales
+assessments
+blight
+foreclosures
+parcels
+parcels_historic
+
+#section a
+sales <- sales %>% 
+  select(parcel_num, sale_date, sale_price) 
+sales$sale_year <-year(sales$sale_date)
+sales
+
+assessments <- assessments %>% 
+  select(PARCELNO , year, ASSESSEDVALUE)
+
+s1 <-sales %>%
+  group_by(sale_year) %>%
+  summarise(mean_price = mean(sale_price))
+s2 <-sales %>%
+  group_by(sale_year) %>%
+  summarise(median_price = median(sales$sale_price))
+s3 <-assessments %>%
+  group_by(year) %>%
+  summarise(mean_ASSESSEDVALUE = mean(ASSESSEDVALUE))
+s4 <-assessments %>%
+  group_by(year) %>%
+  summarise(median_ASSESSEDVALUE = median(ASSESSEDVALUE))
+
+join <- s1 %>% 
+  left_join(s2)
+join1 <- join %>% 
+  left_join(s3, by=c( "sale_year"="year"))
+join2 <- join1 %>% 
+  left_join(s4, by=c( "sale_year"="year"))
+join2
+
+p <- ggplot(data = join2,
+            mapping = aes(
+              x = sale_year,
+              y = mean_price))
+p + geom_line()
+
+p <- ggplot(data = join2,
+            mapping = aes(
+              x = sale_year,
+              y = median_price))
+p + geom_line()
+
+p <- ggplot(data = join2,
+            mapping = aes(
+              x = sale_year,
+              y = mean_ASSESSEDVALUE))
+p + geom_line()
+
+p <- ggplot(data = join2,
+            mapping = aes(
+              x = sale_year,
+              y = median_ASSESSEDVALUE))
+p + geom_line()
 
 
+#section b
+sales <- sales %>% 
+  filter(as.numeric(`sale_price`) > 2500)
+assessments <- assessments %>% 
+  filter(year <= 2020)
+
+joined <- sales %>% 
+  left_join(assessments, by=c("parcel_num"="PARCELNO", "sale_year"="year"))
+
+joined <- joined %>%
+  select(parcel_num, sale_year, sale_price, ASSESSEDVALUE)
+
+
+ratios <-
+  cmfproperty::reformat_data(
+    joined,
+    sale_col = "sale_price",
+    assessment_col = "ASSESSEDVALUE",
+    sale_year_col = "sale_year",
+  )
+
+cmfproperty::make_report(ratios, 
+                         jurisdiction_name = "Detroit, Michigan")
+                         
+stats <- cmfproperty::calc_iaao_stats(ratios)
+head(stats)
+
+binned <- 
+  cmfproperty::binned_scatter(
+    ratios,
+    min_reporting_yr = 2011,
+    max_reporting_yr = 2019,
+    jurisdiction_name = "Detroit, Michigan"
+  )
+
+print(binned[[1]])
+binned[[2]]
+
+pct_over <-
+  cmfproperty::pct_over_under(
+    ratios,
+    min_reporting_yr = 2011,
+    max_reporting_yr = 2019,
+    jurisdiction_name = "Detroit, Michigan"
+  )
+
+print(pct_over[[1]])
+pct_over[[2]]
+
+
+#section 3
+summary_info <-
+  cmfproperty::regression_tests(ratios, produce_table = TRUE)
+kableExtra::kable(summary_info)
+
+#section 4
+
+foreclosures <- foreclosures %>% 
+  select(c(`2002`,`2003`,`2004`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`,`2018`,`2019`))
+foreclosures[is.na(foreclosures)] <- 0
+f <- colSums(foreclosures)
+f
+
+
+frame <- data.frame(
+  year = c(2002,2003,2004,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019),
+           foreclosures_num =c(246,2484, 2034,5108,2252,4111,7986,11632,12999,20040,18785,23845,24340,12590,6289,3880,2748))
+frame
+join_f<- ratios %>%
+left_join(frame, by=c( "SALE_YEAR"="year"))
+join_f
+
+m1 <- lm(RATIO ~ foreclosures_num, data=join_f)
+summary(m1)
