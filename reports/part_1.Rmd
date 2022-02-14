@@ -1,24 +1,26 @@
 ---
-title: "Part 1"
+title: "part1.rmd"
 author: "Tianhao Yi"
-output: 
-  html_document:
-    code_folding: hide
-    df_print: paged
-    theme: sandstone
+date: "2022/2/14"
+output:
+  pdf_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+knitr::opts_chunk$set(echo = TRUE)
+devtools::install_github("cmf-uchicago/cmfproperty")
+
 library(tidyverse)
 library(DBI)
 library(dbplyr)
 library(sf)
 library(cmfproperty)
 library(lubridate)
-
 ```
-```{r setup, include=FALSE}
+
+
+```{r}
 con <- dbConnect(RSQLite::SQLite(), "C:/Users/yitia/Desktop/470/part.1/detroit.sqlite")
 
 DBI::dbListTables(con)
@@ -44,8 +46,10 @@ foreclosures
 parcels
 parcels_historic
 ```
-```{r setup, include=FALSE}
-#section a
+
+
+
+```{r}
 sales <- sales %>% 
   select(parcel_num, sale_date, sale_price) 
 sales$sale_year <-year(sales$sale_date)
@@ -53,8 +57,7 @@ sales
 
 assessments <- assessments %>% 
   select(PARCELNO , year, ASSESSEDVALUE)
-```
-```{r setup, include=FALSE}
+
 s1 <-sales %>%
   group_by(sale_year) %>%
   summarise(mean_price = mean(sale_price))
@@ -68,7 +71,7 @@ s4 <-assessments %>%
   group_by(year) %>%
   summarise(median_ASSESSEDVALUE = median(ASSESSEDVALUE))
 ```
-```{r setup, include=FALSE}
+```{r}
 join <- s1 %>% 
   left_join(s2)
 join1 <- join %>% 
@@ -76,32 +79,45 @@ join1 <- join %>%
 join2 <- join1 %>% 
   left_join(s4, by=c( "sale_year"="year"))
 join2
+```
 
+
+
+```{r}
 p <- ggplot(data = join2,
             mapping = aes(
               x = sale_year,
               y = mean_price))
 p + geom_line()
+```
 
+
+```{r}
 p <- ggplot(data = join2,
             mapping = aes(
               x = sale_year,
               y = median_price))
 p + geom_line()
+```
 
+```{r}
 p <- ggplot(data = join2,
             mapping = aes(
               x = sale_year,
               y = mean_ASSESSEDVALUE))
 p + geom_line()
+```
 
+
+```{r}
 p <- ggplot(data = join2,
             mapping = aes(
               x = sale_year,
               y = median_ASSESSEDVALUE))
 p + geom_line()
+```
 
-
+```{r}
 #section b
 sales <- sales %>% 
   filter(as.numeric(`sale_price`) > 2500)
@@ -128,51 +144,65 @@ cmfproperty::make_report(ratios,
                          
 stats <- cmfproperty::calc_iaao_stats(ratios)
 head(stats)
+```
 
+```{r}
 binned <- 
   cmfproperty::binned_scatter(
     ratios,
     min_reporting_yr = 2011,
-    max_reporting_yr = 2019,
+    max_reporting_yr = 2020,
     jurisdiction_name = "Detroit, Michigan"
   )
 
 print(binned[[1]])
 binned[[2]]
+```
 
+
+```{r}
 pct_over <-
   cmfproperty::pct_over_under(
     ratios,
     min_reporting_yr = 2011,
-    max_reporting_yr = 2019,
+    max_reporting_yr = 2020,
     jurisdiction_name = "Detroit, Michigan"
   )
 
 print(pct_over[[1]])
 pct_over[[2]]
+```
 
-
+```{r}
 #section 3
 summary_info <-
   cmfproperty::regression_tests(ratios, produce_table = TRUE)
 kableExtra::kable(summary_info)
+```
 
+```{r}
 #section 4
-
 foreclosures <- foreclosures %>% 
   select(c(`2002`,`2003`,`2004`,`2006`,`2007`,`2008`,`2009`,`2010`,`2011`,`2012`,`2013`,`2014`,`2015`,`2016`,`2017`,`2018`,`2019`))
 foreclosures[is.na(foreclosures)] <- 0
 f <- colSums(foreclosures)
 f
+```
 
-
+```{r}
 frame <- data.frame(
   year = c(2002,2003,2004,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019),
            foreclosures_num =c(246,2484, 2034,5108,2252,4111,7986,11632,12999,20040,18785,23845,24340,12590,6289,3880,2748))
 frame
+```
+
+```{r}
 join_f<- ratios %>%
 left_join(frame, by=c( "SALE_YEAR"="year"))
 join_f
+```
 
+```{r}
 m1 <- lm(RATIO ~ foreclosures_num, data=join_f)
 summary(m1)
+```
