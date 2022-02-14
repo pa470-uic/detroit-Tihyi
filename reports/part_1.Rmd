@@ -18,7 +18,7 @@ library(cmfproperty)
 library(lubridate)
 
 ```
-
+```{r setup, include=FALSE}
 con <- dbConnect(RSQLite::SQLite(), "C:/Users/yitia/Desktop/470/part.1/detroit.sqlite")
 
 DBI::dbListTables(con)
@@ -43,7 +43,8 @@ blight
 foreclosures
 parcels
 parcels_historic
-
+```
+```{r setup, include=FALSE}
 #section a
 sales <- sales %>% 
   select(parcel_num, sale_date, sale_price) 
@@ -52,7 +53,8 @@ sales
 
 assessments <- assessments %>% 
   select(PARCELNO , year, ASSESSEDVALUE)
-
+```
+```{r setup, include=FALSE}
 s1 <-sales %>%
   group_by(sale_year) %>%
   summarise(mean_price = mean(sale_price))
@@ -65,7 +67,8 @@ s3 <-assessments %>%
 s4 <-assessments %>%
   group_by(year) %>%
   summarise(median_ASSESSEDVALUE = median(ASSESSEDVALUE))
-
+```
+```{r setup, include=FALSE}
 join <- s1 %>% 
   left_join(s2)
 join1 <- join %>% 
